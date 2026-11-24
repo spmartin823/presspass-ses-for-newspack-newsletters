@@ -27,6 +27,9 @@ function presspass_ses_queue_newsletter( WP_Post $post, int $list_id ): int {
 			PressPass_SES_Status::SUBSCRIBED
 		)
 	);
+	if ( 0 === $queued ) {
+		return 0;
+	}
 	update_post_meta( $post->ID, 'presspass_ses_list_id', $list_id );
 	update_post_meta( $post->ID, 'presspass_ses_queued_at', current_time( 'mysql', true ) );
 	wp_schedule_single_event( time(), 'presspass_ses_run_queue' );
@@ -151,7 +154,7 @@ function presspass_ses_run_queue(): void {
 				presspass_ses_send_email(
 					$mailer,
 					$row->email,
-					$post->post_title,
+					html_entity_decode( $post->post_title, ENT_QUOTES, 'UTF-8' ),
 					presspass_ses_render_email( get_post_meta( $post->ID, 'newspack_email_html', true ), $row->email, $unsubscribe_url ),
 					presspass_ses_unsubscribe_headers( $unsubscribe_url )
 				);
