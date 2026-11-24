@@ -106,17 +106,19 @@ function presspass_ses_import_from_mailpoet(): array {
 			$subscriber    = $ours[ $email ];
 			$subscriber_id = (int) $subscriber->id;
 			$fields        = array();
-			$is_changed    = $updated_at > $subscriber->updated_at
-				&& ( $status !== $subscriber->status || $mailpoet_subscriber->first_name !== $subscriber->first_name || $mailpoet_subscriber->last_name !== $subscriber->last_name );
-			if ( $is_changed ) {
-				if ( $status !== $subscriber->status ) {
-					presspass_ses_set_status( $subscriber_id, $status );
-				}
-				$fields = array(
-					'first_name' => $mailpoet_subscriber->first_name,
-					'last_name'  => $mailpoet_subscriber->last_name,
-					'updated_at' => $updated_at,
-				);
+			// Write-back mirrors every status change of ours into MailPoet, so any difference here originated in MailPoet.
+			$is_status_changed = $status !== $subscriber->status;
+			$are_names_changed = $updated_at > $subscriber->updated_at
+				&& ( $mailpoet_subscriber->first_name !== $subscriber->first_name || $mailpoet_subscriber->last_name !== $subscriber->last_name );
+			if ( $is_status_changed ) {
+				presspass_ses_set_status( $subscriber_id, $status );
+			}
+			if ( $are_names_changed ) {
+				$fields['first_name'] = $mailpoet_subscriber->first_name;
+				$fields['last_name']  = $mailpoet_subscriber->last_name;
+			}
+			if ( $is_status_changed || $are_names_changed ) {
+				$fields['updated_at'] = $updated_at;
 				++$counts['updated'];
 			} else {
 				++$counts['unchanged'];
@@ -161,7 +163,11 @@ function presspass_ses_mailpoet_write_back_status( object $subscriber, string $s
 	if ( ! presspass_ses_is_mailpoet_present() ) {
 		return;
 	}
-	$wpdb->query( $wpdb->prepare( 'UPDATE %i SET status = %s, updated_at = NOW() WHERE LOWER(TRIM(email)) = %s', presspass_ses_mailpoet_table( 'subscribers' ), $status, $subscriber->email ) );
+	if ( null === $subscriber->mailpoet_id ) {
+		$wpdb->query( $wpdb->prepare( 'UPDATE %i SET status = %s, updated_at = NOW() WHERE LOWER(TRIM(email)) = %s', presspass_ses_mailpoet_table( 'subscribers' ), $status, $subscriber->email ) );
+	} else {
+		$wpdb->query( $wpdb->prepare( 'UPDATE %i SET status = %s, updated_at = NOW() WHERE id = %d', presspass_ses_mailpoet_table( 'subscribers' ), $status, $subscriber->mailpoet_id ) );
+	}
 }
 add_action( 'presspass_ses_subscriber_status_changed', 'presspass_ses_mailpoet_write_back_status', 10, 2 );
 
@@ -170,7 +176,11 @@ function presspass_ses_mailpoet_write_back_delete( object $subscriber ): void {
 	if ( ! presspass_ses_is_mailpoet_present() ) {
 		return;
 	}
-	$wpdb->query( $wpdb->prepare( 'UPDATE %i SET deleted_at = NOW() WHERE LOWER(TRIM(email)) = %s AND deleted_at IS NULL', presspass_ses_mailpoet_table( 'subscribers' ), $subscriber->email ) );
+	if ( null === $subscriber->mailpoet_id ) {
+		$wpdb->query( $wpdb->prepare( 'UPDATE %i SET deleted_at = NOW() WHERE LOWER(TRIM(email)) = %s AND deleted_at IS NULL', presspass_ses_mailpoet_table( 'subscribers' ), $subscriber->email ) );
+	} else {
+		$wpdb->query( $wpdb->prepare( 'UPDATE %i SET deleted_at = NOW() WHERE id = %d AND deleted_at IS NULL', presspass_ses_mailpoet_table( 'subscribers' ), $subscriber->mailpoet_id ) );
+	}
 }
 add_action( 'presspass_ses_subscriber_deleted', 'presspass_ses_mailpoet_write_back_delete' );
 
@@ -202,6 +212,7 @@ function presspass_ses_render_mailpoet_import(): void {
 		<input type="hidden" name="action" value="presspass_ses_import_mailpoet">
 		<?php wp_nonce_field( 'presspass_ses_import_mailpoet' ); ?>
 		<?php submit_button( __( 'Import from MailPoet', 'presspass-ses-for-newspack-newsletters' ), 'secondary', 'submit', false ); ?>
+		<p class="description"><?php esc_html_e( 'Import mirrors MailPoet: people who were trashed there are deleted here.', 'presspass-ses-for-newspack-newsletters' ); ?></p>
 	</form>
 	<?php
 }
