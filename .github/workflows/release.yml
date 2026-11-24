@@ -7,6 +7,8 @@ on:
 permissions:
   contents: write
 
+concurrency: release
+
 env:
   SLUG: presspass-ses-for-newspack-newsletters
 
