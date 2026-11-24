@@ -10,7 +10,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 function presspass_ses_token( object $subscriber, string $action ): string {
-	return hash_hmac( 'sha256', $subscriber->id . '|' . $subscriber->email . '|' . $action, wp_salt( 'auth' ) );
+	return hash_hmac( 'sha256', $subscriber->id . '|' . $subscriber->email . '|' . $action, get_option( 'presspass_ses_secret' ) );
 }
 
 function presspass_ses_public_url( object $subscriber, string $action ): string {

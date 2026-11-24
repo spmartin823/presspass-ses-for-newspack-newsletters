@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 define( 'PRESSPASS_SES_VERSION', '0.1.0' );
 define( 'PRESSPASS_SES_DIR', plugin_dir_path( __FILE__ ) );
 define( 'PRESSPASS_SES_URL', plugin_dir_url( __FILE__ ) );
-define( 'PRESSPASS_SES_DB_VERSION', '2' );
+define( 'PRESSPASS_SES_DB_VERSION', '3' );
 
 require_once PRESSPASS_SES_DIR . 'includes/schema.php';
 require_once PRESSPASS_SES_DIR . 'includes/subscribers.php';

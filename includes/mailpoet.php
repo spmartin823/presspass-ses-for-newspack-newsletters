@@ -65,6 +65,10 @@ function presspass_ses_import_from_mailpoet(): array {
 
 	// UNIX_TIMESTAMP() reads MailPoet's TIMESTAMP columns as absolute instants, independent of this connection's time_zone.
 	$mailpoet_subscribers = $wpdb->get_results( $wpdb->prepare( 'SELECT id, email, first_name, last_name, status, UNIX_TIMESTAMP(created_at) AS created_ts, UNIX_TIMESTAMP(updated_at) AS updated_ts FROM %i WHERE deleted_at IS NULL ORDER BY id', presspass_ses_mailpoet_table( 'subscribers' ) ) );
+	// A failed read returns no rows, which the pass below would take as every MailPoet-linked subscriber being gone.
+	if ( '' !== $wpdb->last_error ) {
+		wp_die( esc_html( $wpdb->last_error ) );
+	}
 
 	$subscribed_segments = array();
 	foreach ( $wpdb->get_results( $wpdb->prepare( "SELECT subscriber_id, segment_id FROM %i WHERE status = 'subscribed'", presspass_ses_mailpoet_table( 'subscriber_segment' ) ) ) as $membership ) {
@@ -247,6 +251,9 @@ add_action( 'presspass_ses_subscribers_page_top', 'presspass_ses_render_mailpoet
 
 function presspass_ses_handle_import_mailpoet(): void {
 	presspass_ses_authorize_staff( 'presspass_ses_import_mailpoet' );
+	if ( ! presspass_ses_is_mailpoet_present() ) {
+		wp_die( esc_html__( "MailPoet's tables were not found.", 'presspass-ses-for-newspack-newsletters' ) );
+	}
 	wp_safe_redirect( add_query_arg( 'presspass_ses_imported', presspass_ses_import_from_mailpoet(), presspass_ses_subscribers_url() ) );
 	exit;
 }

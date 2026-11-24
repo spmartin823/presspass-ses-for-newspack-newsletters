@@ -18,12 +18,12 @@ function presspass_ses_has_credentials(): bool {
 	return '' !== $settings['smtp_username'] && '' !== $settings['smtp_password'];
 }
 
-function presspass_ses_current_host(): string {
-	return wp_parse_url( home_url(), PHP_URL_HOST );
+function presspass_ses_current_address(): string {
+	return preg_replace( '#^https?://#', '', untrailingslashit( home_url() ) );
 }
 
 function presspass_ses_is_sending_allowed(): bool {
-	return presspass_ses_has_credentials() && presspass_ses_current_host() === presspass_ses_get_settings()['site_host'];
+	return presspass_ses_has_credentials() && presspass_ses_current_address() === presspass_ses_get_settings()['site_address'];
 }
 
 function presspass_ses_render_paused_notice(): void {
@@ -34,9 +34,9 @@ function presspass_ses_render_paused_notice(): void {
 		'<div class="notice notice-error"><p>%s</p></div>',
 		esc_html(
 			sprintf(
-				/* translators: %s: the host name the SES settings were saved on. */
+				/* translators: %s: the site address the SES settings were saved on. */
 				__( 'PressPass SES: sending is paused because this looks like a copy of %s. Re-save the SES settings on this site to send from it.', 'presspass-ses-for-newspack-newsletters' ),
-				presspass_ses_get_settings()['site_host']
+				presspass_ses_get_settings()['site_address']
 			)
 		)
 	);
@@ -52,9 +52,9 @@ function presspass_ses_handle_save_settings(): void {
 	global $wpdb;
 	// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotValidated -- the settings form always posts every field.
 	$previous = presspass_ses_get_settings();
-	$host     = presspass_ses_current_host();
+	$address  = presspass_ses_current_address();
 
-	if ( '' !== $previous['site_host'] && $previous['site_host'] !== $host ) {
+	if ( '' !== $previous['site_address'] && $previous['site_address'] !== $address ) {
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- our own table, there is no WordPress API for it.
 		$wpdb->query( $wpdb->prepare( 'DELETE FROM %i WHERE sent_at IS NULL', presspass_ses_table( 'queue' ) ) );
 	}
@@ -71,7 +71,7 @@ function presspass_ses_handle_save_settings(): void {
 			'sender_email'   => sanitize_email( wp_unslash( $_POST['sender_email'] ) ),
 			'reply_to'       => sanitize_email( wp_unslash( $_POST['reply_to'] ) ),
 			'postal_address' => sanitize_textarea_field( wp_unslash( $_POST['postal_address'] ) ),
-			'site_host'      => $host,
+			'site_address'   => $address,
 		),
 		false
 	);

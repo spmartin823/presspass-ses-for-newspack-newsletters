@@ -84,11 +84,13 @@ function presspass_ses_install_schema(): void {
 			'sender_email'   => '',
 			'reply_to'       => '',
 			'postal_address' => '',
-			'site_host'      => '',
+			'site_address'   => '',
 		),
 		'',
 		false
 	);
+
+	add_option( 'presspass_ses_secret', wp_generate_password( 64, true, true ), '', false );
 
 	update_option( 'presspass_ses_db_version', PRESSPASS_SES_DB_VERSION );
 }

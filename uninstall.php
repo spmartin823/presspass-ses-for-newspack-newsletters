@@ -1,6 +1,6 @@
 <?php
 /**
- * Uninstall. The subscriber, list and queue tables are kept on purpose.
+ * Uninstall. The subscriber, list and queue tables and the link secret are kept on purpose.
  *
  * @package PressPass_SES
  */
