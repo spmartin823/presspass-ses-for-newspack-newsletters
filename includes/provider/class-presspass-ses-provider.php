@@ -173,20 +173,63 @@ class PressPass_SES_Provider extends Newspack_Newsletters_Service_Provider {
 
 	public function list( $post_id, $list_id ) {}
 
+	// The base class calls add_contact() once per list, which would send one confirmation email per list.
+	public function upsert_contact( $contact, $lists ) {
+		$list_ids = array_map(
+			static function ( $list ) {
+				return (int) $list->get_public_id();
+			},
+			$lists
+		);
+		$subscriber = presspass_ses_subscribe( $contact['email'], (string) $contact['name'], $list_ids );
+		return array(
+			'email'  => $subscriber->email,
+			'status' => $subscriber->status,
+		);
+	}
+
 	public function add_contact( $contact, $list_id = false ) {
-		return self::not_implemented_error();
+		$subscriber = presspass_ses_subscribe( $contact['email'], (string) $contact['name'], $list_id ? array( (int) $list_id ) : array() );
+		return array(
+			'email'  => $subscriber->email,
+			'status' => $subscriber->status,
+		);
 	}
 
 	public function get_contact_data( $email, $return_details = false ) {
-		return self::not_implemented_error();
+		$subscriber = presspass_ses_get_subscriber_by_email( $email );
+		if ( null === $subscriber ) {
+			return new WP_Error( 'presspass_ses_contact_not_found', __( 'Contact not found.', 'presspass-ses-for-newspack-newsletters' ) );
+		}
+		return array(
+			'id'     => (int) $subscriber->id,
+			'email'  => $subscriber->email,
+			'status' => $subscriber->status,
+			'lists'  => array_map( 'strval', presspass_ses_get_subscriber_list_ids( (int) $subscriber->id ) ),
+		);
 	}
 
 	public function get_contact_lists( $email ) {
-		return self::not_implemented_error();
+		$subscriber = presspass_ses_get_subscriber_by_email( $email );
+		if ( null === $subscriber ) {
+			return array();
+		}
+		return array_map( 'strval', presspass_ses_get_subscriber_list_ids( (int) $subscriber->id ) );
 	}
 
 	public function update_contact_lists( $email, $lists_to_add = array(), $lists_to_remove = array() ) {
-		return self::not_implemented_error();
+		$subscriber = presspass_ses_get_subscriber_by_email( $email );
+		if ( null === $subscriber ) {
+			presspass_ses_subscribe( $email, '', array_map( 'intval', $lists_to_add ) );
+			return true;
+		}
+		foreach ( $lists_to_add as $list_id ) {
+			presspass_ses_add_to_list( (int) $subscriber->id, (int) $list_id );
+		}
+		foreach ( $lists_to_remove as $list_id ) {
+			presspass_ses_remove_from_list( (int) $subscriber->id, (int) $list_id );
+		}
+		return true;
 	}
 
 	public function get_tag_id( $tag_name, $create_if_not_found = true, $list_id = null ) {
