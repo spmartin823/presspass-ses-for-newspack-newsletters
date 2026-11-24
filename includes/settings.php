@@ -110,6 +110,47 @@ function presspass_ses_handle_send_test_email(): void {
 }
 add_action( 'admin_post_presspass_ses_send_test_email', 'presspass_ses_handle_send_test_email' );
 
+function presspass_ses_handle_activate_provider(): void {
+	check_admin_referer( 'presspass_ses_activate_provider' );
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_die( esc_html__( 'You do not have permission to do this.', 'presspass-ses-for-newspack-newsletters' ), '', 403 );
+	}
+
+	// Newspack's own Settings screen only saves credentials for the providers it ships, so it can't switch to ours.
+	Newspack_Newsletters::set_service_provider( 'presspass_ses' );
+
+	wp_safe_redirect( add_query_arg( 'presspass_ses_notice', 'provider_activated', presspass_ses_settings_url() ) );
+	exit;
+}
+add_action( 'admin_post_presspass_ses_activate_provider', 'presspass_ses_handle_activate_provider' );
+
+function presspass_ses_render_provider_section(): void {
+	$current = Newspack_Newsletters::service_provider();
+	$labels  = wp_list_pluck( Newspack_Newsletters::get_registered_providers(), 'name' ) + array( 'manual' => __( 'Manual / Other', 'presspass-ses-for-newspack-newsletters' ) );
+	?>
+	<h2><?php esc_html_e( 'Newspack Newsletters', 'presspass-ses-for-newspack-newsletters' ); ?></h2>
+	<?php
+	printf(
+		'<p>%s</p>',
+		esc_html(
+			sprintf(
+				/* translators: %s: name of the email service provider Newspack Newsletters is set to use. */
+				__( 'Newspack Newsletters is sending with: %s', 'presspass-ses-for-newspack-newsletters' ),
+				$current ? $labels[ $current ] : __( 'none', 'presspass-ses-for-newspack-newsletters' )
+			)
+		)
+	);
+	?>
+	<?php if ( presspass_ses_has_credentials() && 'presspass_ses' !== $current ) : ?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="presspass_ses_activate_provider">
+			<?php wp_nonce_field( 'presspass_ses_activate_provider' ); ?>
+			<?php submit_button( __( 'Send Newspack Newsletters with Amazon SES', 'presspass-ses-for-newspack-newsletters' ), 'primary' ); ?>
+		</form>
+	<?php endif; ?>
+	<?php
+}
+
 function presspass_ses_settings_url(): string {
 	return admin_url( 'edit.php?post_type=newspack_nl_cpt&page=presspass-ses-settings' );
 }
@@ -132,6 +173,8 @@ function presspass_ses_render_settings_page(): void {
 			<div class="notice notice-success"><p><?php esc_html_e( 'Settings saved.', 'presspass-ses-for-newspack-newsletters' ); ?></p></div>
 		<?php elseif ( isset( $_GET['presspass_ses_notice'] ) && 'test_sent' === $_GET['presspass_ses_notice'] ) : ?>
 			<div class="notice notice-success"><p><?php esc_html_e( 'Test email sent.', 'presspass-ses-for-newspack-newsletters' ); ?></p></div>
+		<?php elseif ( isset( $_GET['presspass_ses_notice'] ) && 'provider_activated' === $_GET['presspass_ses_notice'] ) : ?>
+			<div class="notice notice-success"><p><?php esc_html_e( 'Newspack Newsletters now sends with Amazon SES.', 'presspass-ses-for-newspack-newsletters' ); ?></p></div>
 		<?php endif; ?>
 		<?php if ( isset( $_GET['presspass_ses_error'] ) ) : ?>
 			<div class="notice notice-error"><p><?php echo esc_html( sanitize_text_field( wp_unslash( $_GET['presspass_ses_error'] ) ) ); ?></p></div>
@@ -159,6 +202,7 @@ function presspass_ses_render_settings_page(): void {
 			<?php wp_nonce_field( 'presspass_ses_send_test_email' ); ?>
 			<?php submit_button( __( 'Send test email', 'presspass-ses-for-newspack-newsletters' ), 'secondary' ); ?>
 		</form>
+		<?php presspass_ses_render_provider_section(); ?>
 	</div>
 	<?php
 }

@@ -31,7 +31,18 @@ require_once PRESSPASS_SES_DIR . 'includes/mailer.php';
 require_once PRESSPASS_SES_DIR . 'includes/links.php';
 require_once PRESSPASS_SES_DIR . 'includes/queue.php';
 require_once PRESSPASS_SES_DIR . 'includes/mailpoet.php';
+require_once PRESSPASS_SES_DIR . 'includes/editor.php';
 require_once PRESSPASS_SES_DIR . 'includes/admin/menu.php';
+
+function presspass_ses_register_provider( array $providers ): array {
+	$providers['presspass_ses'] = array(
+		'name'       => __( 'Amazon SES (PressPass)', 'presspass-ses-for-newspack-newsletters' ),
+		'class'      => 'PressPass_SES_Provider',
+		'class_file' => PRESSPASS_SES_DIR . 'includes/provider/class-presspass-ses-provider.php',
+	);
+	return $providers;
+}
+add_filter( 'newspack_newsletters_registered_providers', 'presspass_ses_register_provider' );
 
 if ( is_admin() ) {
 	require_once PRESSPASS_SES_DIR . 'includes/admin/subscribers-page.php';
