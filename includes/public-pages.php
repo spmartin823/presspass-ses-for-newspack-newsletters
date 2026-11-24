@@ -25,8 +25,9 @@ function presspass_ses_subscribe( string $email, string $name, array $list_ids )
 	}
 
 	$subscriber = presspass_ses_get_subscriber( $subscriber_id );
-	if ( PressPass_SES_Status::UNCONFIRMED === $subscriber->status ) {
+	if ( PressPass_SES_Status::UNCONFIRMED === $subscriber->status && false === get_transient( 'presspass_ses_confirm_' . $subscriber_id ) ) {
 		presspass_ses_send_confirmation( $subscriber );
+		set_transient( 'presspass_ses_confirm_' . $subscriber_id, 1, 10 * MINUTE_IN_SECONDS );
 	}
 	return $subscriber;
 }
@@ -63,25 +64,31 @@ function presspass_ses_handle_public_request(): void {
 	$action     = sanitize_key( wp_unslash( $_GET['presspass_ses'] ) );
 	$subscriber = presspass_ses_get_subscriber( absint( $_GET['presspass_ses_id'] ) );
 	if ( null === $subscriber || ! in_array( $action, array( 'confirm', 'unsubscribe' ), true ) || ! hash_equals( presspass_ses_token( $subscriber, $action ), sanitize_text_field( wp_unslash( $_GET['presspass_ses_token'] ) ) ) ) {
-		presspass_ses_render_page( 404, __( 'This link is no longer valid.', 'presspass-ses-for-newspack-newsletters' ), '' );
+		presspass_ses_render_page( 404, __( 'This link is no longer valid.', 'presspass-ses-for-newspack-newsletters' ), '', '' );
 	}
 	$site = presspass_ses_site_name();
+	// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotValidated -- PHP always sets REQUEST_METHOD for a web request.
+	$is_post = 'POST' === $_SERVER['REQUEST_METHOD'];
 
 	if ( 'confirm' === $action ) {
 		if ( PressPass_SES_Status::UNCONFIRMED === $subscriber->status ) {
+			// Mail scanners follow links, so a GET only shows the button.
+			if ( ! $is_post ) {
+				/* translators: %s: the site name. */
+				presspass_ses_render_page( 200, sprintf( __( 'Confirm your subscription to %s.', 'presspass-ses-for-newspack-newsletters' ), $site ), presspass_ses_public_url( $subscriber, 'confirm' ), __( 'Confirm subscription', 'presspass-ses-for-newspack-newsletters' ) );
+			}
 			presspass_ses_set_status( (int) $subscriber->id, PressPass_SES_Status::SUBSCRIBED );
 		} elseif ( PressPass_SES_Status::SUBSCRIBED !== $subscriber->status ) {
 			// An old confirmation link must not re-subscribe someone who has since unsubscribed or bounced.
-			presspass_ses_render_page( 404, __( 'This link is no longer valid.', 'presspass-ses-for-newspack-newsletters' ), '' );
+			presspass_ses_render_page( 404, __( 'This link is no longer valid.', 'presspass-ses-for-newspack-newsletters' ), '', '' );
 		}
 		/* translators: %s: the site name. */
-		presspass_ses_render_page( 200, sprintf( __( "You're subscribed to %s.", 'presspass-ses-for-newspack-newsletters' ), $site ), '' );
+		presspass_ses_render_page( 200, sprintf( __( "You're subscribed to %s.", 'presspass-ses-for-newspack-newsletters' ), $site ), '', '' );
 	}
 
-	// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotValidated -- PHP always sets REQUEST_METHOD for a web request.
-	if ( 'POST' !== $_SERVER['REQUEST_METHOD'] ) {
+	if ( ! $is_post ) {
 		/* translators: %s: the site name. */
-		presspass_ses_render_page( 200, sprintf( __( 'Stop receiving emails from %s?', 'presspass-ses-for-newspack-newsletters' ), $site ), presspass_ses_public_url( $subscriber, 'unsubscribe' ) );
+		presspass_ses_render_page( 200, sprintf( __( 'Stop receiving emails from %s?', 'presspass-ses-for-newspack-newsletters' ), $site ), presspass_ses_public_url( $subscriber, 'unsubscribe' ), __( 'Unsubscribe', 'presspass-ses-for-newspack-newsletters' ) );
 	}
 	if ( PressPass_SES_Status::UNSUBSCRIBED !== $subscriber->status ) {
 		presspass_ses_set_status( (int) $subscriber->id, PressPass_SES_Status::UNSUBSCRIBED );
@@ -93,12 +100,12 @@ function presspass_ses_handle_public_request(): void {
 		exit;
 	}
 	/* translators: %s: the site name. */
-	presspass_ses_render_page( 200, sprintf( __( "You've been unsubscribed from %s.", 'presspass-ses-for-newspack-newsletters' ), $site ), '' );
+	presspass_ses_render_page( 200, sprintf( __( "You've been unsubscribed from %s.", 'presspass-ses-for-newspack-newsletters' ), $site ), '', '' );
 }
 // phpcs:enable WordPress.Security.NonceVerification
 add_action( 'template_redirect', 'presspass_ses_handle_public_request' );
 
-function presspass_ses_render_page( int $status, string $message, string $form_url ): void {
+function presspass_ses_render_page( int $status, string $message, string $form_url, string $button_label ): void {
 	status_header( $status );
 	nocache_headers();
 	header( 'Content-Type: text/html; charset=utf-8' );
@@ -122,7 +129,7 @@ button{padding:10px 24px;border:0;border-radius:4px;background:#1e1e1e;color:#ff
 <h1><?php echo esc_html( $site ); ?></h1>
 <p><?php echo esc_html( $message ); ?></p>
 	<?php if ( '' !== $form_url ) : ?>
-<form method="post" action="<?php echo esc_url( $form_url ); ?>"><button type="submit"><?php esc_html_e( 'Unsubscribe', 'presspass-ses-for-newspack-newsletters' ); ?></button></form>
+<form method="post" action="<?php echo esc_url( $form_url ); ?>"><button type="submit"><?php echo esc_html( $button_label ); ?></button></form>
 	<?php endif; ?>
 </main>
 </body>
