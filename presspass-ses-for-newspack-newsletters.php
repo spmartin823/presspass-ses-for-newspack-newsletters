@@ -32,6 +32,7 @@ require_once PRESSPASS_SES_DIR . 'includes/links.php';
 require_once PRESSPASS_SES_DIR . 'includes/queue.php';
 require_once PRESSPASS_SES_DIR . 'includes/mailpoet.php';
 require_once PRESSPASS_SES_DIR . 'includes/editor.php';
+require_once PRESSPASS_SES_DIR . 'includes/public-pages.php';
 require_once PRESSPASS_SES_DIR . 'includes/admin/menu.php';
 
 function presspass_ses_register_provider( array $providers ): array {
