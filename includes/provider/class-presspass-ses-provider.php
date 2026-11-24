@@ -136,7 +136,7 @@ class PressPass_SES_Provider extends Newspack_Newsletters_Service_Provider {
 		$mailer = presspass_ses_build_mailer();
 		$mailer->setFrom( get_post_meta( $post_id, 'senderEmail', true ), get_post_meta( $post_id, 'senderName', true ) );
 		foreach ( $emails as $email ) {
-			presspass_ses_send_email( $mailer, $email, $post->post_title, presspass_ses_render_email( $html, $email, '#' ), array() );
+			presspass_ses_send_email( $mailer, $email, html_entity_decode( $post->post_title, ENT_QUOTES, 'UTF-8' ), presspass_ses_render_email( $html, $email, '#' ), array() );
 		}
 		$mailer->smtpClose();
 
