@@ -368,8 +368,9 @@ function presspass_ses_handle_save_subscriber(): void {
 	$first_name = sanitize_text_field( wp_unslash( $_POST['first_name'] ) );
 	$last_name  = sanitize_text_field( wp_unslash( $_POST['last_name'] ) );
 	$list_ids   = isset( $_POST['list_ids'] ) ? array_map( 'intval', wp_unslash( $_POST['list_ids'] ) ) : array();
+	$is_edit    = 0 !== $id;
 
-	if ( 0 === $id ) {
+	if ( ! $is_edit ) {
 		$email = sanitize_email( wp_unslash( $_POST['email'] ) );
 		$error = '';
 		if ( ! is_email( $email ) ) {
@@ -391,8 +392,6 @@ function presspass_ses_handle_save_subscriber(): void {
 		}
 		$id = presspass_ses_insert_subscriber( $email, $first_name, $last_name, PressPass_SES_Status::SUBSCRIBED, 'admin' );
 	} else {
-		$subscriber = presspass_ses_get_subscriber( $id );
-		$status     = sanitize_key( wp_unslash( $_POST['status'] ) );
 		presspass_ses_update_subscriber(
 			$id,
 			array(
@@ -400,11 +399,7 @@ function presspass_ses_handle_save_subscriber(): void {
 				'last_name'  => $last_name,
 			)
 		);
-		if ( $status !== $subscriber->status ) {
-			presspass_ses_set_status( $id, $status );
-		}
 	}
-	// phpcs:enable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotValidated, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 
 	$current_list_ids = presspass_ses_get_subscriber_list_ids( $id );
 	foreach ( array_diff( $list_ids, $current_list_ids ) as $list_id ) {
@@ -413,6 +408,14 @@ function presspass_ses_handle_save_subscriber(): void {
 	foreach ( array_diff( $current_list_ids, $list_ids ) as $list_id ) {
 		presspass_ses_remove_from_list( $id, $list_id );
 	}
+
+	if ( $is_edit ) {
+		$status = sanitize_key( wp_unslash( $_POST['status'] ) );
+		if ( $status !== presspass_ses_get_subscriber( $id )->status ) {
+			presspass_ses_set_status( $id, $status );
+		}
+	}
+	// phpcs:enable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotValidated, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 
 	wp_safe_redirect( add_query_arg( 'presspass_ses_notice', 'saved', presspass_ses_subscribers_url() ) );
 	exit;
