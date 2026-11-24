@@ -14,7 +14,7 @@ function presspass_ses_token( object $subscriber, string $action ): string {
 }
 
 function presspass_ses_public_url( object $subscriber, string $action ): string {
-	return home_url( '/?presspass_ses=' . $action . '&s=' . $subscriber->id . '&t=' . presspass_ses_token( $subscriber, $action ) );
+	return home_url( '/?presspass_ses=' . $action . '&presspass_ses_id=' . $subscriber->id . '&presspass_ses_token=' . presspass_ses_token( $subscriber, $action ) );
 }
 
 function presspass_ses_render_email( string $html, string $email, string $unsubscribe_url ): string {

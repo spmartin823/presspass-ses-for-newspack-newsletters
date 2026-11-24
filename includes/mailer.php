@@ -51,7 +51,7 @@ function presspass_ses_send_email( PHPMailer\PHPMailer\PHPMailer $mailer, string
 	$mailer->Subject = $subject;
 	$mailer->isHTML( true );
 	$mailer->Body    = $html;
-	$mailer->AltBody = wp_strip_all_tags( $html );
+	$mailer->AltBody = html_entity_decode( wp_strip_all_tags( preg_replace( '/<a\s[^>]*?\bhref\s*=\s*(["\'])(.*?)\1[^>]*>(.*?)<\/a>/is', '$3 ($2)', $html ) ), ENT_QUOTES, 'UTF-8' );
 	foreach ( $headers as $name => $value ) {
 		$mailer->addCustomHeader( $name, $value );
 	}
