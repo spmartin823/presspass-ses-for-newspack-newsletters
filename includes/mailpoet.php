@@ -75,12 +75,24 @@ function presspass_ses_import_from_mailpoet(): array {
 		$ours[ $subscriber->email ] = $subscriber;
 	}
 
-	$seen_emails  = array();
-	$mailpoet_ids = array();
+	$mailpoet_emails = array();
 	foreach ( $mailpoet_subscribers as $mailpoet_subscriber ) {
-		$mailpoet_id                  = (int) $mailpoet_subscriber->id;
-		$mailpoet_ids[ $mailpoet_id ] = true;
-		$email                        = presspass_ses_normalize_email( $mailpoet_subscriber->email );
+		$mailpoet_emails[ (int) $mailpoet_subscriber->id ] = presspass_ses_normalize_email( $mailpoet_subscriber->email );
+	}
+
+	// An address changed in MailPoet makes our old row gone, so the new address imports as a fresh row with that mailpoet_id.
+	foreach ( $ours as $email => $subscriber ) {
+		if ( null !== $subscriber->mailpoet_id && ( ! isset( $mailpoet_emails[ (int) $subscriber->mailpoet_id ] ) || $mailpoet_emails[ (int) $subscriber->mailpoet_id ] !== $email ) ) {
+			presspass_ses_delete_subscriber( (int) $subscriber->id );
+			unset( $ours[ $email ] );
+			++$counts['deleted'];
+		}
+	}
+
+	$seen_emails = array();
+	foreach ( $mailpoet_subscribers as $mailpoet_subscriber ) {
+		$mailpoet_id = (int) $mailpoet_subscriber->id;
+		$email       = $mailpoet_emails[ $mailpoet_id ];
 		if ( ! is_email( $email ) || isset( $seen_emails[ $email ] ) ) {
 			++$counts['skipped'];
 			continue;
@@ -137,13 +149,6 @@ function presspass_ses_import_from_mailpoet(): array {
 		}
 	}
 
-	foreach ( $ours as $subscriber ) {
-		if ( null !== $subscriber->mailpoet_id && ! isset( $mailpoet_ids[ (int) $subscriber->mailpoet_id ] ) ) {
-			presspass_ses_delete_subscriber( (int) $subscriber->id );
-			++$counts['deleted'];
-		}
-	}
-
 	add_action( 'presspass_ses_subscriber_status_changed', 'presspass_ses_mailpoet_write_back_status', 10, 2 );
 	add_action( 'presspass_ses_subscriber_deleted', 'presspass_ses_mailpoet_write_back_delete' );
 
@@ -153,7 +158,7 @@ function presspass_ses_import_from_mailpoet(): array {
 // MailPoet's timestamp columns are TIMESTAMP, so NOW() stores the right instant whatever this connection's time_zone is.
 function presspass_ses_mailpoet_write_back_status( object $subscriber, string $status ): void {
 	global $wpdb;
-	if ( ! in_array( $status, array( PressPass_SES_Status::UNSUBSCRIBED, PressPass_SES_Status::BOUNCED ), true ) || ! presspass_ses_is_mailpoet_present() ) {
+	if ( ! presspass_ses_is_mailpoet_present() ) {
 		return;
 	}
 	$wpdb->query( $wpdb->prepare( 'UPDATE %i SET status = %s, updated_at = NOW() WHERE LOWER(TRIM(email)) = %s', presspass_ses_mailpoet_table( 'subscribers' ), $status, $subscriber->email ) );
