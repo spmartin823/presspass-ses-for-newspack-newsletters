@@ -28,6 +28,7 @@ require_once PRESSPASS_SES_DIR . 'includes/subscribers.php';
 require_once PRESSPASS_SES_DIR . 'includes/lists.php';
 require_once PRESSPASS_SES_DIR . 'includes/settings.php';
 require_once PRESSPASS_SES_DIR . 'includes/mailer.php';
+require_once PRESSPASS_SES_DIR . 'includes/mailpoet.php';
 require_once PRESSPASS_SES_DIR . 'includes/admin/menu.php';
 
 if ( is_admin() ) {
