@@ -432,9 +432,12 @@ function presspass_ses_handle_bulk_subscribers(): void {
 	$list_id  = isset( $_REQUEST['bulk_list_id'] ) ? (int) $_REQUEST['bulk_list_id'] : 0;
 	// phpcs:enable WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 
-	// The table sits inside this form, so pressing Enter in its page-number box posts here with no action.
+	// The table sits inside this form, so pressing Enter in its page-number box posts here with no action. An empty table has no page box.
 	if ( '' === $action ) {
-		wp_safe_redirect( add_query_arg( 'paged', absint( $_REQUEST['paged'] ), $redirect ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput.InputNotValidated -- nonce checked above; the table's pagination always posts paged.
+		if ( isset( $_REQUEST['paged'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- nonce checked above.
+			$redirect = add_query_arg( 'paged', absint( $_REQUEST['paged'] ), $redirect ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- nonce checked above.
+		}
+		wp_safe_redirect( $redirect );
 		exit;
 	}
 
