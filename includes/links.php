@@ -47,6 +47,9 @@ function presspass_ses_unsubscribe_headers( string $unsubscribe_url ): array {
 }
 
 function presspass_ses_tracking_pixel_url( string $url ): string {
+	if ( 'presspass_ses' !== Newspack_Newsletters::service_provider() ) {
+		return $url;
+	}
 	return add_query_arg( 'em', 'PRESSPASS_SES_EMAIL', $url );
 }
 // Priority 20: Newspack's own priority-10 filter first rewrites the URL to np-newsletters-pixel.php.

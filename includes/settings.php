@@ -96,7 +96,7 @@ function presspass_ses_handle_send_test_email(): void {
 		presspass_ses_send_email(
 			presspass_ses_build_mailer(),
 			wp_get_current_user()->user_email,
-			'PressPass SES test email',
+			__( 'PressPass SES test email', 'presspass-ses-for-newspack-newsletters' ),
 			'<p>' . esc_html__( 'This is a test email from PressPass SES for Newspack Newsletters.', 'presspass-ses-for-newspack-newsletters' ) . '</p>',
 			array()
 		);
@@ -126,7 +126,8 @@ add_action( 'admin_post_presspass_ses_activate_provider', 'presspass_ses_handle_
 
 function presspass_ses_render_provider_section(): void {
 	$current = Newspack_Newsletters::service_provider();
-	$labels  = wp_list_pluck( Newspack_Newsletters::get_registered_providers(), 'name' ) + array( 'manual' => __( 'Manual / Other', 'presspass-ses-for-newspack-newsletters' ) );
+	// A provider whose plugin is no longer active is shown by its slug.
+	$labels  = wp_list_pluck( Newspack_Newsletters::get_registered_providers(), 'name' ) + array( 'manual' => __( 'Manual / Other', 'presspass-ses-for-newspack-newsletters' ) ) + array( $current => $current );
 	?>
 	<h2><?php esc_html_e( 'Newspack Newsletters', 'presspass-ses-for-newspack-newsletters' ); ?></h2>
 	<?php

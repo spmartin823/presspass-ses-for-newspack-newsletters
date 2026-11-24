@@ -50,26 +50,11 @@ function presspass_ses_get_send_errors( int $newsletter_id ): array {
 }
 
 function presspass_ses_render_sends_page(): void {
-	$last_error = get_option( 'presspass_ses_last_error' );
 	// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display-only selection.
 	$chosen_id = isset( $_GET['newsletter'] ) ? (int) $_GET['newsletter'] : 0;
 	?>
 	<div class="wrap">
 		<h1><?php esc_html_e( 'SES Sends', 'presspass-ses-for-newspack-newsletters' ); ?></h1>
-		<?php if ( false !== $last_error ) : ?>
-			<div class="notice notice-error"><p>
-				<?php
-				echo esc_html(
-					sprintf(
-						/* translators: 1: date and time of the error, 2: the error message. */
-						__( 'SES error at %1$s: %2$s. Sending will retry every minute.', 'presspass-ses-for-newspack-newsletters' ),
-						presspass_ses_local_date( $last_error['time'] ),
-						rtrim( $last_error['message'], '.' )
-					)
-				);
-				?>
-			</p></div>
-		<?php endif; ?>
 		<table class="widefat striped">
 			<thead>
 				<tr>

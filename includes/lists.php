@@ -44,8 +44,9 @@ function presspass_ses_create_list( string $name, string $description ): int {
 			'created_at'  => current_time( 'mysql', true ),
 		)
 	);
+	$list_id = $wpdb->insert_id;
 	Newspack_Newsletters_Subscription::clear_lists_cache();
-	return $wpdb->insert_id;
+	return $list_id;
 }
 
 function presspass_ses_update_list( int $id, string $name, string $description ): void {
