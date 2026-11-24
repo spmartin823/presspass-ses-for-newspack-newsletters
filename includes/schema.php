@@ -74,6 +74,22 @@ function presspass_ses_install_schema(): void {
 		) {$charset_collate};"
 	);
 
+	add_option(
+		'presspass_ses_settings',
+		array(
+			'region'         => 'us-east-1',
+			'smtp_username'  => '',
+			'smtp_password'  => '',
+			'sender_name'    => '',
+			'sender_email'   => '',
+			'reply_to'       => '',
+			'postal_address' => '',
+			'site_host'      => '',
+		),
+		'',
+		false
+	);
+
 	update_option( 'presspass_ses_db_version', PRESSPASS_SES_DB_VERSION );
 }
 
