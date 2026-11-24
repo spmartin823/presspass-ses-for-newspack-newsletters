@@ -51,6 +51,7 @@ function presspass_ses_import_from_mailpoet(): array {
 
 	remove_action( 'presspass_ses_subscriber_status_changed', 'presspass_ses_mailpoet_write_back_status', 10 );
 	remove_action( 'presspass_ses_subscriber_deleted', 'presspass_ses_mailpoet_write_back_delete', 10 );
+	remove_action( 'presspass_ses_list_membership_changed', 'presspass_ses_mailpoet_write_back_membership', 10 );
 
 	$counts = array(
 		'added'     => 0,
@@ -65,9 +66,9 @@ function presspass_ses_import_from_mailpoet(): array {
 	// UNIX_TIMESTAMP() reads MailPoet's TIMESTAMP columns as absolute instants, independent of this connection's time_zone.
 	$mailpoet_subscribers = $wpdb->get_results( $wpdb->prepare( 'SELECT id, email, first_name, last_name, status, UNIX_TIMESTAMP(created_at) AS created_ts, UNIX_TIMESTAMP(updated_at) AS updated_ts FROM %i WHERE deleted_at IS NULL ORDER BY id', presspass_ses_mailpoet_table( 'subscribers' ) ) );
 
-	$segment_ids_by_subscriber = array();
+	$subscribed_segments = array();
 	foreach ( $wpdb->get_results( $wpdb->prepare( "SELECT subscriber_id, segment_id FROM %i WHERE status = 'subscribed'", presspass_ses_mailpoet_table( 'subscriber_segment' ) ) ) as $membership ) {
-		$segment_ids_by_subscriber[ (int) $membership->subscriber_id ][] = (int) $membership->segment_id;
+		$subscribed_segments[ (int) $membership->subscriber_id ][ (int) $membership->segment_id ] = true;
 	}
 
 	$ours = array();
@@ -102,7 +103,8 @@ function presspass_ses_import_from_mailpoet(): array {
 		$status     = presspass_ses_mailpoet_status( $mailpoet_subscriber->status );
 		$updated_at = gmdate( 'Y-m-d H:i:s', (int) $mailpoet_subscriber->updated_ts );
 
-		if ( isset( $ours[ $email ] ) ) {
+		$is_existing = isset( $ours[ $email ] );
+		if ( $is_existing ) {
 			$subscriber    = $ours[ $email ];
 			$subscriber_id = (int) $subscriber->id;
 			$fields        = array();
@@ -119,9 +121,6 @@ function presspass_ses_import_from_mailpoet(): array {
 			}
 			if ( $is_status_changed || $are_names_changed ) {
 				$fields['updated_at'] = $updated_at;
-				++$counts['updated'];
-			} else {
-				++$counts['unchanged'];
 			}
 			if ( null === $subscriber->mailpoet_id ) {
 				$fields['mailpoet_id'] = $mailpoet_id;
@@ -142,17 +141,27 @@ function presspass_ses_import_from_mailpoet(): array {
 			++$counts['added'];
 		}
 
-		if ( isset( $segment_ids_by_subscriber[ $mailpoet_id ] ) ) {
-			foreach ( $segment_ids_by_subscriber[ $mailpoet_id ] as $segment_id ) {
-				if ( isset( $list_ids[ $segment_id ] ) ) {
-					presspass_ses_add_to_list( $subscriber_id, $list_ids[ $segment_id ] );
-				}
+		$is_membership_changed = false;
+		foreach ( $list_ids as $segment_id => $list_id ) {
+			if ( isset( $subscribed_segments[ $mailpoet_id ][ $segment_id ] ) ) {
+				$is_membership_changed = presspass_ses_add_to_list( $subscriber_id, $list_id ) || $is_membership_changed;
+			} else {
+				$is_membership_changed = presspass_ses_remove_from_list( $subscriber_id, $list_id ) || $is_membership_changed;
+			}
+		}
+
+		if ( $is_existing ) {
+			if ( $is_status_changed || $are_names_changed || $is_membership_changed ) {
+				++$counts['updated'];
+			} else {
+				++$counts['unchanged'];
 			}
 		}
 	}
 
 	add_action( 'presspass_ses_subscriber_status_changed', 'presspass_ses_mailpoet_write_back_status', 10, 2 );
 	add_action( 'presspass_ses_subscriber_deleted', 'presspass_ses_mailpoet_write_back_delete' );
+	add_action( 'presspass_ses_list_membership_changed', 'presspass_ses_mailpoet_write_back_membership', 10, 3 );
 
 	return $counts;
 }
@@ -183,6 +192,24 @@ function presspass_ses_mailpoet_write_back_delete( object $subscriber ): void {
 	}
 }
 add_action( 'presspass_ses_subscriber_deleted', 'presspass_ses_mailpoet_write_back_delete' );
+
+function presspass_ses_mailpoet_write_back_membership( int $subscriber_id, int $list_id, bool $is_member ): void {
+	global $wpdb;
+	if ( ! presspass_ses_is_mailpoet_present() ) {
+		return;
+	}
+	$subscriber = presspass_ses_get_subscriber( $subscriber_id );
+	$list       = presspass_ses_get_list( $list_id );
+	if ( null === $subscriber->mailpoet_id || null === $list->mailpoet_segment_id ) {
+		return;
+	}
+	if ( $is_member ) {
+		$wpdb->query( $wpdb->prepare( "INSERT INTO %i (subscriber_id, segment_id, status, created_at, updated_at) VALUES (%d, %d, 'subscribed', NOW(), NOW()) ON DUPLICATE KEY UPDATE status = 'subscribed', updated_at = NOW()", presspass_ses_mailpoet_table( 'subscriber_segment' ), $subscriber->mailpoet_id, $list->mailpoet_segment_id ) );
+	} else {
+		$wpdb->query( $wpdb->prepare( "UPDATE %i SET status = 'unsubscribed', updated_at = NOW() WHERE subscriber_id = %d AND segment_id = %d", presspass_ses_mailpoet_table( 'subscriber_segment' ), $subscriber->mailpoet_id, $list->mailpoet_segment_id ) );
+	}
+}
+add_action( 'presspass_ses_list_membership_changed', 'presspass_ses_mailpoet_write_back_membership', 10, 3 );
 
 function presspass_ses_render_mailpoet_import(): void {
 	if ( ! presspass_ses_is_mailpoet_present() ) {

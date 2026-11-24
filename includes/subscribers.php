@@ -127,20 +127,28 @@ function presspass_ses_count_by_status( int $list_id ): array {
 	return $counts;
 }
 
-function presspass_ses_add_to_list( int $subscriber_id, int $list_id ): void {
+function presspass_ses_add_to_list( int $subscriber_id, int $list_id ): bool {
 	global $wpdb;
-	$wpdb->query( $wpdb->prepare( 'INSERT IGNORE INTO %i (list_id, subscriber_id) VALUES (%d, %d)', presspass_ses_table( 'list_subscribers' ), $list_id, $subscriber_id ) );
+	$is_added = 1 === $wpdb->query( $wpdb->prepare( 'INSERT IGNORE INTO %i (list_id, subscriber_id) VALUES (%d, %d)', presspass_ses_table( 'list_subscribers' ), $list_id, $subscriber_id ) );
+	if ( $is_added ) {
+		do_action( 'presspass_ses_list_membership_changed', $subscriber_id, $list_id, true );
+	}
+	return $is_added;
 }
 
-function presspass_ses_remove_from_list( int $subscriber_id, int $list_id ): void {
+function presspass_ses_remove_from_list( int $subscriber_id, int $list_id ): bool {
 	global $wpdb;
-	$wpdb->delete(
+	$is_removed = 1 === $wpdb->delete(
 		presspass_ses_table( 'list_subscribers' ),
 		array(
 			'list_id'       => $list_id,
 			'subscriber_id' => $subscriber_id,
 		)
 	);
+	if ( $is_removed ) {
+		do_action( 'presspass_ses_list_membership_changed', $subscriber_id, $list_id, false );
+	}
+	return $is_removed;
 }
 
 function presspass_ses_get_subscriber_list_ids( int $subscriber_id ): array {
