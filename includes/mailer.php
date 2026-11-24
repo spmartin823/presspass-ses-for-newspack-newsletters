@@ -42,7 +42,8 @@ function presspass_ses_build_mailer(): PHPMailer\PHPMailer\PHPMailer {
 
 function presspass_ses_send_email( PHPMailer\PHPMailer\PHPMailer $mailer, string $to, string $subject, string $html, array $headers ): void {
 	if ( ! presspass_ses_is_sending_allowed() ) {
-		throw new RuntimeException( 'Sending is paused on this copy of the site.' );
+		// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- escaped where the message is displayed.
+		throw new RuntimeException( __( 'Sending is paused on this copy of the site.', 'presspass-ses-for-newspack-newsletters' ) );
 	}
 
 	$mailer->clearAllRecipients();
@@ -51,7 +52,9 @@ function presspass_ses_send_email( PHPMailer\PHPMailer\PHPMailer $mailer, string
 	$mailer->Subject = $subject;
 	$mailer->isHTML( true );
 	$mailer->Body    = $html;
-	$mailer->AltBody = html_entity_decode( wp_strip_all_tags( preg_replace( '/<a\s[^>]*?\bhref\s*=\s*(["\'])(.*?)\1[^>]*>(.*?)<\/a>/is', '$3 ($2)', $html ) ), ENT_QUOTES, 'UTF-8' );
+	$text            = preg_replace( '/<a\s[^>]*?\bhref\s*=\s*(["\'])(.*?)\1[^>]*>(.*?)<\/a>/is', '$3 ($2)', $html );
+	$text            = preg_replace( '#<br\s*/?>|</(p|div|tr|h[1-6]|li)>#i', "\n", $text );
+	$mailer->AltBody = preg_replace( '/\R{3,}/', "\n\n", html_entity_decode( wp_strip_all_tags( $text ), ENT_QUOTES, 'UTF-8' ) );
 	foreach ( $headers as $name => $value ) {
 		$mailer->addCustomHeader( $name, $value );
 	}

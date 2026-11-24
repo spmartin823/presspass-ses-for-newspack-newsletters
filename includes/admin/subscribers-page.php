@@ -119,7 +119,7 @@ class PressPass_SES_Subscribers_Table extends WP_List_Table {
 				array(
 					'status'  => $status,
 					'list_id' => $filters['list_id'],
-					's'       => $filters['search'],
+					's'       => rawurlencode( $filters['search'] ),
 				),
 				presspass_ses_subscribers_url()
 			);
@@ -203,7 +203,7 @@ class PressPass_SES_Subscribers_Table extends WP_List_Table {
 					'action'           => 'presspass_ses_bulk_subscribers',
 					'bulk_action'      => $bulk_action,
 					'subscriber[]'     => $id,
-					'_wp_http_referer' => rawurlencode( wp_unslash( $_SERVER['REQUEST_URI'] ) ), // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- only echoed back through esc_url and wp_get_referer().
+					'_wp_http_referer' => rawurlencode( esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ) ), // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotValidated -- WordPress always sets REQUEST_URI on an admin screen.
 				),
 				admin_url( 'admin-post.php' )
 			),
@@ -253,7 +253,7 @@ function presspass_ses_render_subscribers_page(): void {
 				'action'  => 'presspass_ses_export_subscribers',
 				'status'  => $filters['status'],
 				'list_id' => $filters['list_id'],
-				's'       => $filters['search'],
+				's'       => rawurlencode( $filters['search'] ),
 			),
 			admin_url( 'admin-post.php' )
 		),
@@ -432,10 +432,14 @@ function presspass_ses_handle_bulk_subscribers(): void {
 	$list_id  = isset( $_REQUEST['bulk_list_id'] ) ? (int) $_REQUEST['bulk_list_id'] : 0;
 	// phpcs:enable WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 
-	$error = '';
+	// The table sits inside this form, so pressing Enter in its page-number box posts here with no action.
 	if ( '' === $action ) {
-		$error = __( 'Choose a bulk action.', 'presspass-ses-for-newspack-newsletters' );
-	} elseif ( array() === $ids ) {
+		wp_safe_redirect( add_query_arg( 'paged', absint( $_REQUEST['paged'] ), $redirect ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput.InputNotValidated -- nonce checked above; the table's pagination always posts paged.
+		exit;
+	}
+
+	$error = '';
+	if ( array() === $ids ) {
 		$error = __( 'Select at least one subscriber.', 'presspass-ses-for-newspack-newsletters' );
 	} elseif ( in_array( $action, array( 'add_to_list', 'remove_from_list' ), true ) && 0 === $list_id ) {
 		$error = __( 'Choose a list first.', 'presspass-ses-for-newspack-newsletters' );
@@ -454,7 +458,7 @@ function presspass_ses_handle_bulk_subscribers(): void {
 			if ( PressPass_SES_Status::UNSUBSCRIBED !== presspass_ses_get_subscriber( $id )->status ) {
 				presspass_ses_set_status( $id, PressPass_SES_Status::UNSUBSCRIBED );
 			}
-		} else {
+		} elseif ( 'delete' === $action ) {
 			presspass_ses_delete_subscriber( $id );
 		}
 	}
@@ -463,6 +467,14 @@ function presspass_ses_handle_bulk_subscribers(): void {
 	exit;
 }
 add_action( 'admin_post_presspass_ses_bulk_subscribers', 'presspass_ses_handle_bulk_subscribers' );
+
+// Spreadsheet apps run a cell starting with one of these as a formula; signup names are public input.
+function presspass_ses_csv_cell( string $value ): string {
+	if ( in_array( substr( $value, 0, 1 ), array( '=', '+', '-', '@' ), true ) ) {
+		return "'" . $value;
+	}
+	return $value;
+}
 
 function presspass_ses_handle_export_subscribers(): void {
 	presspass_ses_authorize_staff( 'presspass_ses_export_subscribers' );
@@ -484,7 +496,7 @@ function presspass_ses_handle_export_subscribers(): void {
 			foreach ( presspass_ses_get_subscriber_list_ids( (int) $subscriber->id ) as $list_id ) {
 				$names[] = $list_names[ $list_id ];
 			}
-			fputcsv( $output, array( $subscriber->email, $subscriber->first_name, $subscriber->last_name, $subscriber->status, implode( '|', $names ), $subscriber->created_at ), ',', '"', '' );
+			fputcsv( $output, array_map( 'presspass_ses_csv_cell', array( $subscriber->email, $subscriber->first_name, $subscriber->last_name, $subscriber->status, implode( '|', $names ), $subscriber->created_at ) ), ',', '"', '' );
 		}
 		++$page;
 	} while ( count( $result['subscribers'] ) === 500 );

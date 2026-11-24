@@ -41,7 +41,12 @@ function presspass_ses_drop_unsent( int $post_id ): void {
 	$wpdb->query( $wpdb->prepare( 'DELETE FROM %i WHERE newsletter_id = %d AND sent_at IS NULL', presspass_ses_table( 'queue' ), $post_id ) );
 }
 add_action( 'trashed_post', 'presspass_ses_drop_unsent' );
-add_action( 'deleted_post', 'presspass_ses_drop_unsent' );
+
+function presspass_ses_delete_queue_rows( int $post_id ): void {
+	global $wpdb;
+	$wpdb->query( $wpdb->prepare( 'DELETE FROM %i WHERE newsletter_id = %d', presspass_ses_table( 'queue' ), $post_id ) );
+}
+add_action( 'deleted_post', 'presspass_ses_delete_queue_rows' );
 
 function presspass_ses_has_pending_sends(): bool {
 	global $wpdb;
@@ -75,6 +80,25 @@ function presspass_ses_record_last_error( string $message ): void {
 		false
 	);
 }
+
+function presspass_ses_render_last_error_notice(): void {
+	$last_error = get_option( 'presspass_ses_last_error' );
+	if ( false === $last_error || ! current_user_can( 'edit_others_posts' ) ) {
+		return;
+	}
+	printf(
+		'<div class="notice notice-error"><p>%s</p></div>',
+		esc_html(
+			sprintf(
+				/* translators: 1: date and time of the error, 2: the error message. */
+				__( 'SES error at %1$s: %2$s. Sending will retry every minute.', 'presspass-ses-for-newspack-newsletters' ),
+				presspass_ses_local_date( $last_error['time'] ),
+				rtrim( $last_error['message'], '.' )
+			)
+		)
+	);
+}
+add_action( 'admin_notices', 'presspass_ses_render_last_error_notice' );
 
 function presspass_ses_set_queue_row( object $row, array $fields ): void {
 	global $wpdb;
@@ -143,7 +167,8 @@ function presspass_ses_run_queue(): void {
 			}
 
 			if ( PressPass_SES_Status::SUBSCRIBED !== $row->status ) {
-				presspass_ses_set_queue_row( $row, array( 'error' => 'skipped: ' . $row->status ) );
+				/* translators: %s: the subscriber's status. */
+				presspass_ses_set_queue_row( $row, array( 'error' => sprintf( __( 'skipped: %s', 'presspass-ses-for-newspack-newsletters' ), $row->status ) ) );
 				continue;
 			}
 
@@ -167,7 +192,7 @@ function presspass_ses_run_queue(): void {
 					continue;
 				}
 				presspass_ses_set_queue_row( $row, array( 'sent_at' => null ) );
-				presspass_ses_record_last_error( $mailer->ErrorInfo );
+				presspass_ses_record_last_error( $row->email . ': ' . $mailer->ErrorInfo );
 				$mailer->smtpClose();
 				return;
 			}

@@ -4,7 +4,8 @@
  * plugin) and offers no filter or registry for third-party providers, so its Send button crashes for any
  * provider it does not ship. Defining our entry on Object.prototype is the only way that lookup can find
  * it. The property is non-enumerable (invisible to for...in, Object.keys and spreads), configurable, and
- * only loaded on the newsletter editor screen.
+ * only loaded on the newsletter editor screen. Delete this file once Newspack ships a provider registry; if
+ * Newspack changes the lookup before then, the Send window fails with an error rather than mis-sending.
  */
 ( function () {
 	const strings = window.presspass_ses_editor;
@@ -16,6 +17,9 @@
 			displayName: strings.displayName,
 			renderPreSendInfo( newsletterData, meta ) {
 				const list = newsletterData.lists.find( ( sendList ) => sendList.id === meta.send_list_id );
+				if ( ! list ) {
+					return null;
+				}
 				return wp.element.createElement(
 					'p',
 					null,

@@ -157,7 +157,12 @@ class PressPass_SES_Provider extends Newspack_Newsletters_Service_Provider {
 		if ( null !== $sender_error ) {
 			return $sender_error;
 		}
-		if ( 0 === presspass_ses_queue_newsletter( $post, (int) get_post_meta( $post->ID, 'send_list_id', true ) ) ) {
+		// A list id left over from another provider can start with digits, so a cast would pick the wrong list.
+		$list_id = get_post_meta( $post->ID, 'send_list_id', true );
+		if ( ! ctype_digit( $list_id ) ) {
+			return new WP_Error( 'presspass_ses_no_list', __( 'Choose a list to send to.', 'presspass-ses-for-newspack-newsletters' ) );
+		}
+		if ( 0 === presspass_ses_queue_newsletter( $post, (int) $list_id ) ) {
 			return new WP_Error( 'presspass_ses_empty_list', __( 'This list has no subscribed members.', 'presspass-ses-for-newspack-newsletters' ) );
 		}
 		return true;
@@ -175,13 +180,14 @@ class PressPass_SES_Provider extends Newspack_Newsletters_Service_Provider {
 
 	// The base class calls add_contact() once per list, which would send one confirmation email per list.
 	public function upsert_contact( $contact, $lists ) {
-		$list_ids = array_map(
-			static function ( $list ) {
-				return (int) $list->get_public_id();
-			},
-			$lists
-		);
-		$subscriber = presspass_ses_subscribe( $contact['email'], (string) $contact['name'], $list_ids );
+		$list_ids = array();
+		foreach ( $lists as $list ) {
+			if ( ! $list->is_local() ) {
+				$list_ids[] = (int) $list->get_public_id();
+			}
+		}
+		// Newspack's own callers leave out the name.
+		$subscriber = presspass_ses_subscribe( $contact['email'], $contact['name'] ?? '', $list_ids );
 		return array(
 			'email'  => $subscriber->email,
 			'status' => $subscriber->status,
@@ -189,7 +195,7 @@ class PressPass_SES_Provider extends Newspack_Newsletters_Service_Provider {
 	}
 
 	public function add_contact( $contact, $list_id = false ) {
-		$subscriber = presspass_ses_subscribe( $contact['email'], (string) $contact['name'], $list_id ? array( (int) $list_id ) : array() );
+		$subscriber = presspass_ses_subscribe( $contact['email'], $contact['name'] ?? '', $list_id ? array( (int) $list_id ) : array() );
 		return array(
 			'email'  => $subscriber->email,
 			'status' => $subscriber->status,
