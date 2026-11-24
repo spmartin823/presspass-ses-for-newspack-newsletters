@@ -32,6 +32,9 @@ function presspass_ses_mailpoet_status( string $mailpoet_status ): string {
 function presspass_ses_import_mailpoet_lists(): array {
 	global $wpdb;
 	$segments = $wpdb->get_results( $wpdb->prepare( "SELECT id, name, description FROM %i WHERE type = 'default' AND deleted_at IS NULL", presspass_ses_mailpoet_table( 'segments' ) ) );
+	if ( '' !== $wpdb->last_error ) {
+		wp_die( esc_html( $wpdb->last_error ) );
+	}
 	$list_ids = array();
 	foreach ( $segments as $segment ) {
 		$list_id = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM %i WHERE mailpoet_segment_id = %d', presspass_ses_table( 'lists' ), $segment->id ) );
@@ -65,13 +68,17 @@ function presspass_ses_import_from_mailpoet(): array {
 
 	// UNIX_TIMESTAMP() reads MailPoet's TIMESTAMP columns as absolute instants, independent of this connection's time_zone.
 	$mailpoet_subscribers = $wpdb->get_results( $wpdb->prepare( 'SELECT id, email, first_name, last_name, status, UNIX_TIMESTAMP(created_at) AS created_ts, UNIX_TIMESTAMP(updated_at) AS updated_ts FROM %i WHERE deleted_at IS NULL ORDER BY id', presspass_ses_mailpoet_table( 'subscribers' ) ) );
-	// A failed read returns no rows, which the pass below would take as every MailPoet-linked subscriber being gone.
+	// A failed read returns no rows, which the passes below would take as everyone being gone or off every list.
+	if ( '' !== $wpdb->last_error ) {
+		wp_die( esc_html( $wpdb->last_error ) );
+	}
+	$memberships = $wpdb->get_results( $wpdb->prepare( "SELECT subscriber_id, segment_id FROM %i WHERE status = 'subscribed'", presspass_ses_mailpoet_table( 'subscriber_segment' ) ) );
 	if ( '' !== $wpdb->last_error ) {
 		wp_die( esc_html( $wpdb->last_error ) );
 	}
 
 	$subscribed_segments = array();
-	foreach ( $wpdb->get_results( $wpdb->prepare( "SELECT subscriber_id, segment_id FROM %i WHERE status = 'subscribed'", presspass_ses_mailpoet_table( 'subscriber_segment' ) ) ) as $membership ) {
+	foreach ( $memberships as $membership ) {
 		$subscribed_segments[ (int) $membership->subscriber_id ][ (int) $membership->segment_id ] = true;
 	}
 
@@ -170,16 +177,23 @@ function presspass_ses_import_from_mailpoet(): array {
 	return $counts;
 }
 
+// Someone added to MailPoet after the last import has no mailpoet_id yet, so they are matched on email.
+function presspass_ses_mailpoet_ids( object $subscriber ): array {
+	global $wpdb;
+	if ( null !== $subscriber->mailpoet_id ) {
+		return array( (int) $subscriber->mailpoet_id );
+	}
+	return array_map( 'intval', $wpdb->get_col( $wpdb->prepare( 'SELECT id FROM %i WHERE LOWER(TRIM(email)) = %s', presspass_ses_mailpoet_table( 'subscribers' ), $subscriber->email ) ) );
+}
+
 // MailPoet's timestamp columns are TIMESTAMP, so NOW() stores the right instant whatever this connection's time_zone is.
 function presspass_ses_mailpoet_write_back_status( object $subscriber, string $status ): void {
 	global $wpdb;
 	if ( ! presspass_ses_is_mailpoet_present() ) {
 		return;
 	}
-	if ( null === $subscriber->mailpoet_id ) {
-		$wpdb->query( $wpdb->prepare( 'UPDATE %i SET status = %s, updated_at = NOW() WHERE LOWER(TRIM(email)) = %s', presspass_ses_mailpoet_table( 'subscribers' ), $status, $subscriber->email ) );
-	} else {
-		$wpdb->query( $wpdb->prepare( 'UPDATE %i SET status = %s, updated_at = NOW() WHERE id = %d', presspass_ses_mailpoet_table( 'subscribers' ), $status, $subscriber->mailpoet_id ) );
+	foreach ( presspass_ses_mailpoet_ids( $subscriber ) as $mailpoet_id ) {
+		$wpdb->query( $wpdb->prepare( 'UPDATE %i SET status = %s, updated_at = NOW() WHERE id = %d', presspass_ses_mailpoet_table( 'subscribers' ), $status, $mailpoet_id ) );
 	}
 }
 add_action( 'presspass_ses_subscriber_status_changed', 'presspass_ses_mailpoet_write_back_status', 10, 2 );
@@ -189,10 +203,8 @@ function presspass_ses_mailpoet_write_back_delete( object $subscriber ): void {
 	if ( ! presspass_ses_is_mailpoet_present() ) {
 		return;
 	}
-	if ( null === $subscriber->mailpoet_id ) {
-		$wpdb->query( $wpdb->prepare( 'UPDATE %i SET deleted_at = NOW() WHERE LOWER(TRIM(email)) = %s AND deleted_at IS NULL', presspass_ses_mailpoet_table( 'subscribers' ), $subscriber->email ) );
-	} else {
-		$wpdb->query( $wpdb->prepare( 'UPDATE %i SET deleted_at = NOW() WHERE id = %d AND deleted_at IS NULL', presspass_ses_mailpoet_table( 'subscribers' ), $subscriber->mailpoet_id ) );
+	foreach ( presspass_ses_mailpoet_ids( $subscriber ) as $mailpoet_id ) {
+		$wpdb->query( $wpdb->prepare( 'UPDATE %i SET deleted_at = NOW() WHERE id = %d AND deleted_at IS NULL', presspass_ses_mailpoet_table( 'subscribers' ), $mailpoet_id ) );
 	}
 }
 add_action( 'presspass_ses_subscriber_deleted', 'presspass_ses_mailpoet_write_back_delete' );
@@ -202,15 +214,16 @@ function presspass_ses_mailpoet_write_back_membership( int $subscriber_id, int $
 	if ( ! presspass_ses_is_mailpoet_present() ) {
 		return;
 	}
-	$subscriber = presspass_ses_get_subscriber( $subscriber_id );
-	$list       = presspass_ses_get_list( $list_id );
-	if ( null === $subscriber->mailpoet_id || null === $list->mailpoet_segment_id ) {
+	$list = presspass_ses_get_list( $list_id );
+	if ( null === $list->mailpoet_segment_id ) {
 		return;
 	}
-	if ( $is_member ) {
-		$wpdb->query( $wpdb->prepare( "INSERT INTO %i (subscriber_id, segment_id, status, created_at, updated_at) VALUES (%d, %d, 'subscribed', NOW(), NOW()) ON DUPLICATE KEY UPDATE status = 'subscribed', updated_at = NOW()", presspass_ses_mailpoet_table( 'subscriber_segment' ), $subscriber->mailpoet_id, $list->mailpoet_segment_id ) );
-	} else {
-		$wpdb->query( $wpdb->prepare( "UPDATE %i SET status = 'unsubscribed', updated_at = NOW() WHERE subscriber_id = %d AND segment_id = %d", presspass_ses_mailpoet_table( 'subscriber_segment' ), $subscriber->mailpoet_id, $list->mailpoet_segment_id ) );
+	foreach ( presspass_ses_mailpoet_ids( presspass_ses_get_subscriber( $subscriber_id ) ) as $mailpoet_id ) {
+		if ( $is_member ) {
+			$wpdb->query( $wpdb->prepare( "INSERT INTO %i (subscriber_id, segment_id, status, created_at, updated_at) VALUES (%d, %d, 'subscribed', NOW(), NOW()) ON DUPLICATE KEY UPDATE status = 'subscribed', updated_at = NOW()", presspass_ses_mailpoet_table( 'subscriber_segment' ), $mailpoet_id, $list->mailpoet_segment_id ) );
+		} else {
+			$wpdb->query( $wpdb->prepare( "UPDATE %i SET status = 'unsubscribed', updated_at = NOW() WHERE subscriber_id = %d AND segment_id = %d", presspass_ses_mailpoet_table( 'subscriber_segment' ), $mailpoet_id, $list->mailpoet_segment_id ) );
+		}
 	}
 }
 add_action( 'presspass_ses_list_membership_changed', 'presspass_ses_mailpoet_write_back_membership', 10, 3 );
