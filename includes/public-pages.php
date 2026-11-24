@@ -57,12 +57,12 @@ function presspass_ses_site_name(): string {
 
 // phpcs:disable WordPress.Security.NonceVerification -- these links are opened from emails; the HMAC token in the URL is the credential.
 function presspass_ses_handle_public_request(): void {
-	if ( ! isset( $_GET['presspass_ses'] ) ) {
+	if ( ! isset( $_GET['presspass_ses'], $_GET['presspass_ses_id'], $_GET['presspass_ses_token'] ) ) {
 		return;
 	}
 	$action     = sanitize_key( wp_unslash( $_GET['presspass_ses'] ) );
-	$subscriber = isset( $_GET['s'], $_GET['t'] ) ? presspass_ses_get_subscriber( absint( $_GET['s'] ) ) : null;
-	if ( null === $subscriber || ! in_array( $action, array( 'confirm', 'unsubscribe' ), true ) || ! hash_equals( presspass_ses_token( $subscriber, $action ), sanitize_text_field( wp_unslash( $_GET['t'] ) ) ) ) {
+	$subscriber = presspass_ses_get_subscriber( absint( $_GET['presspass_ses_id'] ) );
+	if ( null === $subscriber || ! in_array( $action, array( 'confirm', 'unsubscribe' ), true ) || ! hash_equals( presspass_ses_token( $subscriber, $action ), sanitize_text_field( wp_unslash( $_GET['presspass_ses_token'] ) ) ) ) {
 		presspass_ses_render_page( 404, __( 'This link is no longer valid.', 'presspass-ses-for-newspack-newsletters' ), '' );
 	}
 	$site = presspass_ses_site_name();
