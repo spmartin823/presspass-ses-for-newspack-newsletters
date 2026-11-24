@@ -22,3 +22,9 @@ define( 'PRESSPASS_SES_VERSION', '0.1.0' );
 define( 'PRESSPASS_SES_DIR', plugin_dir_path( __FILE__ ) );
 define( 'PRESSPASS_SES_URL', plugin_dir_url( __FILE__ ) );
 define( 'PRESSPASS_SES_DB_VERSION', '1' );
+
+require_once PRESSPASS_SES_DIR . 'includes/schema.php';
+require_once PRESSPASS_SES_DIR . 'includes/subscribers.php';
+require_once PRESSPASS_SES_DIR . 'includes/lists.php';
+
+register_activation_hook( __FILE__, 'presspass_ses_install_schema' );
