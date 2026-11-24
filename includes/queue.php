@@ -33,6 +33,13 @@ function presspass_ses_queue_newsletter( WP_Post $post, int $list_id ): int {
 	return $queued;
 }
 
+function presspass_ses_drop_unsent( int $post_id ): void {
+	global $wpdb;
+	$wpdb->query( $wpdb->prepare( 'DELETE FROM %i WHERE newsletter_id = %d AND sent_at IS NULL', presspass_ses_table( 'queue' ), $post_id ) );
+}
+add_action( 'trashed_post', 'presspass_ses_drop_unsent' );
+add_action( 'deleted_post', 'presspass_ses_drop_unsent' );
+
 function presspass_ses_has_pending_sends(): bool {
 	global $wpdb;
 	return null !== $wpdb->get_var( $wpdb->prepare( 'SELECT 1 FROM %i WHERE sent_at IS NULL LIMIT 1', presspass_ses_table( 'queue' ) ) );
