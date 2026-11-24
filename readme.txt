@@ -20,13 +20,14 @@ Admin screens live under the Newsletters menu: Subscribers, Lists, SES Sends and
 = Subscribers and lists =
 
 * Subscribers are stored in your WordPress database, with the statuses subscribed, unconfirmed, unsubscribed and bounced.
-* Add, edit, search, filter by list and status, and use bulk actions (change status, add to or remove from a list, delete).
-* Visitors sign up with Newspack's Subscribe block. New people receive a confirmation email and stay unconfirmed until they click the link in it.
+* Add, edit, search, filter by list and status, and use bulk actions (add to list, remove from list, unsubscribe, delete).
+* Export the subscribers shown on the screen, with the current filters and search, as a CSV file.
+* Visitors sign up with Newspack's Subscribe block. New people receive a confirmation email and stay unconfirmed until they open its link and click the Confirm subscription button on the page it opens. At most one confirmation email is sent to an address every 10 minutes.
 * Every email has its own unsubscribe link. It opens a page with a button, so mail scanners that follow links cannot unsubscribe people. One-click unsubscribe from mail clients (the List-Unsubscribe header) works directly. Unsubscribing applies to all lists.
 
 = Import from MailPoet =
 
-If MailPoet is installed, the Subscribers screen has an "Import from MailPoet" button. It copies MailPoet's lists and subscribers with their statuses, and can be run again at any time. The import mirrors MailPoet: people trashed there are deleted here, MailPoet's status wins when the two differ, and an address changed in MailPoet replaces the old one. While MailPoet's tables exist, status changes and deletes made here are written back to the person's MailPoet row, so a MailPoet send cannot reach someone you removed here.
+If MailPoet is installed, the Subscribers screen has an "Import from MailPoet" button. It copies MailPoet's lists and subscribers with their statuses, and can be run again at any time. The import mirrors MailPoet: people trashed there are deleted here, MailPoet's status wins when the two differ, and an address changed in MailPoet replaces the old one. List membership is mirrored both ways: Import makes each person's lists here match their MailPoet lists, and while MailPoet's tables exist, status changes, list additions and removals, and deletes made here are written back to MailPoet, so a MailPoet send cannot reach someone you removed here.
 
 = Sending =
 
@@ -34,10 +35,10 @@ Newsletters are sent in the background by WP-Cron, at 10 emails per second. A wo
 
 * One email per recipient, each with its own unsubscribe link, the List-Unsubscribe and one-click headers, and a footer with your postal address.
 * A person is marked sent just before their email goes out, so the queue is designed so that an interrupted run resumes without sending anyone the same newsletter twice.
-* If SES cannot be reached, rejects the login, throttles, or refuses the message for an account or sender reason, sending pauses, the SES Sends page shows the error, and the worker retries every minute. Only a recipient the server refuses is recorded as failed.
+* If SES cannot be reached, rejects the login, throttles, or refuses the message for an account or sender reason, sending pauses, the error is shown on every admin screen, and the worker retries every minute. The SES Sends page's "Failed or skipped" count covers recipients the server refused and people who were no longer subscribed when their turn came.
 * To stop a send, move the newsletter to Trash. Unsent recipients are dropped, and restoring the newsletter does not resume the send.
 * Send and test-send refuse a From address that is not on the same domain as the sender address in SES Settings.
-* Sending only works on the site address the SES settings were saved on. A staging or local copy of the site is paused until the settings are saved there, which also discards that copy's unsent queue.
+* Sending only works on the site address the SES settings were saved on, including any port or path. A staging or local copy of the site is paused until the settings are saved there, which also discards that copy's unsent queue.
 * Newspack's open-tracking pixel works. Ad-click tracking is not supported for this provider.
 
 = Requirements =
@@ -76,9 +77,13 @@ Sending only works on the site address the SES settings were saved on, so a copy
 
 No. Newspack's open-tracking pixel works, but ad-click tracking is not supported for this provider.
 
+= Can I deactivate or delete the plugin? =
+
+Yes, but unsubscribe links in emails you have already sent only work while the plugin is active. Keep it active for at least 30 days after your last send.
+
 = What happens to my subscribers if I delete the plugin? =
 
-Your subscribers are kept. Deleting the plugin removes the SES settings and the scheduled send worker, but leaves the four tables `{prefix}presspass_ses_subscribers`, `{prefix}presspass_ses_lists`, `{prefix}presspass_ses_list_subscribers` and `{prefix}presspass_ses_queue`, and the `presspass_ses_db_version` option. To remove them completely, drop the four tables from your database (for example with phpMyAdmin or `wp db query "DROP TABLE ..."`) and run `wp option delete presspass_ses_db_version`.
+Your subscribers are kept. Deleting the plugin removes the SES settings and the scheduled send worker, but leaves the four tables `{prefix}presspass_ses_subscribers`, `{prefix}presspass_ses_lists`, `{prefix}presspass_ses_list_subscribers` and `{prefix}presspass_ses_queue`, and the `presspass_ses_db_version` and `presspass_ses_secret` options. To remove everything, drop the four tables from your database (for example with phpMyAdmin or `wp db query "DROP TABLE ..."`) and run `wp option delete presspass_ses_db_version presspass_ses_secret`.
 
 = Importing a very large MailPoet list =
 
