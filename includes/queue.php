@@ -146,8 +146,8 @@ function presspass_ses_run_queue(): void {
 
 			$post            = get_post( (int) $row->newsletter_id );
 			$unsubscribe_url = presspass_ses_public_url( $row, 'unsubscribe' );
-			$mailer->setFrom( get_post_meta( $post->ID, 'senderEmail', true ), get_post_meta( $post->ID, 'senderName', true ) );
 			try {
+				$mailer->setFrom( get_post_meta( $post->ID, 'senderEmail', true ), get_post_meta( $post->ID, 'senderName', true ) );
 				presspass_ses_send_email(
 					$mailer,
 					$row->email,
@@ -158,15 +158,15 @@ function presspass_ses_run_queue(): void {
 				delete_option( 'presspass_ses_last_error' );
 				usleep( 100000 );
 			} catch ( PHPMailer\PHPMailer\Exception $exception ) {
-				// ErrorInfo, unlike the exception message, carries the SMTP server's reply (e.g. SES's "454 Throttling failure").
-				$error = $mailer->ErrorInfo;
-				if ( str_contains( $error, 'Throttling' ) || str_contains( $error, 'Message rejected' ) ) {
-					presspass_ses_set_queue_row( $row, array( 'sent_at' => null ) );
-					presspass_ses_record_last_error( $error );
-					$mailer->smtpClose();
-					return;
+				// Only a refused recipient is that person's problem; anything else (throttling, rejected sender, lost connection) would fail everyone after them, so pause and retry.
+				if ( PHPMailer\PHPMailer\PHPMailer::STOP_CONTINUE === $exception->getCode() ) {
+					presspass_ses_set_queue_row( $row, array( 'error' => $mailer->ErrorInfo ) );
+					continue;
 				}
-				presspass_ses_set_queue_row( $row, array( 'error' => $error ) );
+				presspass_ses_set_queue_row( $row, array( 'sent_at' => null ) );
+				presspass_ses_record_last_error( $mailer->ErrorInfo );
+				$mailer->smtpClose();
+				return;
 			}
 		}
 	}
