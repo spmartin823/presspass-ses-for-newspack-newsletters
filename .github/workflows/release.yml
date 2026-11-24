@@ -1,0 +1,75 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+env:
+  SLUG: presspass-ses-for-newspack-newsletters
+
+jobs:
+  release:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+    env:
+      SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Bump version
+        id: bump
+        run: |
+          current=$(sed -n 's/^ \* Version: *//p' presspass-ses-for-newspack-newsletters.php)
+          last_tag=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+          version=$current
+          if [ -n "$last_tag" ]; then
+            IFS=. read -r major minor patch <<< "${last_tag#v}"
+            commits=$(git log "$last_tag..HEAD" --format=%B)
+            if echo "$commits" | grep -qE '^([a-z]+(\(.*\))?!:|BREAKING CHANGE)'; then
+              version="$((major + 1)).0.0"
+            elif echo "$commits" | grep -qE '^feat(\(.*\))?:'; then
+              version="$major.$((minor + 1)).0"
+            else
+              version="$major.$minor.$((patch + 1))"
+            fi
+          fi
+          sed -i "s/^ \* Version:.*/ * Version:           $version/" presspass-ses-for-newspack-newsletters.php
+          sed -i "s/define( 'PRESSPASS_SES_VERSION', '.*' );/define( 'PRESSPASS_SES_VERSION', '$version' );/" presspass-ses-for-newspack-newsletters.php
+          sed -i "s/^Stable tag:.*/Stable tag: $version/" readme.txt
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add presspass-ses-for-newspack-newsletters.php readme.txt
+          git diff --cached --quiet || git commit -m "chore: release v${{ steps.bump.outputs.version }} [skip ci]"
+          git tag "v${{ steps.bump.outputs.version }}"
+          git push origin HEAD:main "v${{ steps.bump.outputs.version }}"
+
+      - name: Build zip
+        run: |
+          mkdir -p "build/$SLUG"
+          rsync -a --exclude=/build --exclude-from=.distignore . "build/$SLUG/"
+          cd build
+          zip -r "$SLUG.zip" "$SLUG"
+
+      - name: GitHub release
+        run: gh release create "v${{ steps.bump.outputs.version }}" "build/$SLUG.zip" --title "v${{ steps.bump.outputs.version }}" --generate-notes
+
+      - name: Deploy to WordPress.org
+        if: env.SVN_USERNAME != ''
+        uses: 10up/action-wordpress-plugin-deploy@stable
+        env:
+          SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
+          SLUG: ${{ env.SLUG }}
+          VERSION: ${{ steps.bump.outputs.version }}
+          ASSETS_DIR: .wordpress-org
+          BUILD_DIR: build/${{ env.SLUG }}
