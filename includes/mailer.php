@@ -16,6 +16,11 @@ require_once ABSPATH . WPINC . '/PHPMailer/Exception.php';
 function presspass_ses_build_mailer(): PHPMailer\PHPMailer\PHPMailer {
 	$settings = presspass_ses_get_settings();
 
+	// Same validator wp_mail() uses, so an address that passed is_email() when stored is not rejected by PHPMailer's stricter default.
+	PHPMailer\PHPMailer\PHPMailer::$validator = static function ( $email ) {
+		return (bool) is_email( $email );
+	};
+
 	$mailer = new PHPMailer\PHPMailer\PHPMailer( true );
 	$mailer->isSMTP();
 	// phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- this is the SES SMTP host, not offloaded assets.
