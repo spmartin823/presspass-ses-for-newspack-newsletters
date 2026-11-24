@@ -28,12 +28,15 @@ require_once PRESSPASS_SES_DIR . 'includes/subscribers.php';
 require_once PRESSPASS_SES_DIR . 'includes/lists.php';
 require_once PRESSPASS_SES_DIR . 'includes/settings.php';
 require_once PRESSPASS_SES_DIR . 'includes/mailer.php';
+require_once PRESSPASS_SES_DIR . 'includes/links.php';
+require_once PRESSPASS_SES_DIR . 'includes/queue.php';
 require_once PRESSPASS_SES_DIR . 'includes/mailpoet.php';
 require_once PRESSPASS_SES_DIR . 'includes/admin/menu.php';
 
 if ( is_admin() ) {
 	require_once PRESSPASS_SES_DIR . 'includes/admin/subscribers-page.php';
 	require_once PRESSPASS_SES_DIR . 'includes/admin/lists-page.php';
+	require_once PRESSPASS_SES_DIR . 'includes/admin/sends-page.php';
 }
 
 register_activation_hook( __FILE__, 'presspass_ses_install_schema' );

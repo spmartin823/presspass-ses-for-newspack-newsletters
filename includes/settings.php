@@ -77,6 +77,10 @@ function presspass_ses_handle_save_settings(): void {
 	);
 	// phpcs:enable WordPress.Security.ValidatedSanitizedInput.InputNotValidated
 
+	if ( presspass_ses_has_pending_sends() ) {
+		wp_schedule_single_event( time(), 'presspass_ses_run_queue' );
+	}
+
 	wp_safe_redirect( add_query_arg( 'presspass_ses_notice', 'saved', presspass_ses_settings_url() ) );
 	exit;
 }
